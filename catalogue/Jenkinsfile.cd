@@ -1,0 +1,9 @@
+@Library('jenkins-shared-library') _
+
+def configMap = [
+    GIT_URL: "https://github.com/meghashyam-singh/4-5.git",
+    BRANCH: "main",
+    COMPONENT: "catalogue"
+]
+
+deploymentPipeline(configMap)

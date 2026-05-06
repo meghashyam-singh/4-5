@@ -1,0 +1,126 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: payment-config
+  namespace: roboshop
+data:
+  CART_HOST: "cart-service"
+  CART_PORT: "8080"
+  USER_HOST: "user-service"
+  USER_PORT: "8080"
+  AMQP_HOST: "rabbitmq-service"
+  AMQP_USER: "roboshop"
+  AMQP_PASS: "roboshop123"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payment
+  namespace: roboshop
+  labels:
+    project: roboshop
+    tier: backend
+    component: payment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      project: roboshop
+      tier: backend
+      component: payment
+  template:
+    metadata:
+      labels:
+        project: roboshop
+        tier: backend
+        component: payment
+    spec:
+      serviceAccountName: payment-service-account
+      containers:
+        - name: payment-cont
+          image: meghashyam792/roboshop:payment
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+              name: payment-port
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "128Mi"
+            limits:
+              cpu: "400m"
+              memory: "256Mi"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 50
+            failureThreshold: 2
+            periodSeconds: 50
+            timeoutSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 50
+            failureThreshold: 2
+            periodSeconds: 50
+            timeoutSeconds: 15
+          envFrom:
+            - configMapRef:
+                name: payment-config
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: payment-service
+  namespace: roboshop
+spec:
+  type: ClusterIP
+  selector:
+    project: roboshop
+    tier: backend
+    component: payment
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+      name: payment-port
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: payment-hpa
+  namespace: roboshop
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: payment
+  minReplicas: 1
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 80
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: payment-service-account
+  namespace: roboshop
+  labels:
+    project: roboshop
+    tier: backend
+    component: payment
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::515138251473:role/PAYMENT-ROLE
+      

@@ -1,0 +1,148 @@
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: rabbitmq-storage
+provisioner: ebs.csi.aws.com
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rabbitmq-config
+  namespace: roboshop
+data:
+  RABBITMQ_DEFAULT_USER: "roboshop"
+  RABBITMQ_DEFAULT_VHOST: "/"
+
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: rabbitmq
+  namespace: roboshop
+  labels:
+    project: roboshop
+    tier: db
+    component: rabbitmq
+spec:
+  serviceName: rabbitmq-headless-service
+  replicas: 1
+  selector:
+    matchLabels:
+      project: roboshop
+      tier: db
+      component: rabbitmq
+  template:
+    metadata:
+      labels:
+        project: roboshop
+        tier: db
+        component: rabbitmq
+    spec:
+      serviceAccountName: rabbitmq-service-account
+      containers:
+        - name: rabbitmq-cont
+          image: meghashyam792/roboshop:rabbitmq
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 5672
+              name: rabbitmq-port
+          resources:
+            requests:
+              cpu: "300m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+          readinessProbe:
+            tcpSocket:
+              port: rabbitmq-port
+            failureThreshold: 1
+            initialDelaySeconds: 40
+            periodSeconds: 40
+            timeoutSeconds: 15
+          livenessProbe:
+            tcpSocket:
+              port: rabbitmq-port
+            failureThreshold: 1
+            initialDelaySeconds: 40
+            periodSeconds: 40
+            timeoutSeconds: 15
+          envFrom:
+            - configMapRef:
+                name: rabbitmq-config
+          volumeMounts:
+            - name: rabbitmq-pvc
+              mountPath: /var/lib/rabbitmq
+  volumeClaimTemplates:
+    - metadata:
+        name: rabbitmq-pvc
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: rabbitmq-storage
+        resources:
+          requests:
+            storage: "5Gi"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq-service
+  namespace: roboshop
+spec:
+  type: ClusterIP
+  selector:
+    project: roboshop
+    tier: db
+    component: rabbitmq
+  ports:
+    - protocol: TCP
+      port: 5672
+      targetPort: 5672
+      name: rabbitmq-port
+    - protocol: TCP
+      port: 15672
+      targetPort: 15672
+      name: rabbitmq-management-port
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq-headless-service
+  namespace: roboshop
+spec:
+  clusterIP: None
+  selector:
+    project: roboshop
+    tier: db
+    component: rabbitmq
+  ports:
+    - protocol: TCP
+      port: 5672
+      targetPort: 5672
+      name: rabbitmq-port
+    - protocol: TCP
+      port: 15672
+      targetPort: 15672
+      name: rabbitmq-management-port
+
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: rabbitmq-service-account
+  namespace: roboshop
+  labels:
+    project: roboshop
+    tier: db
+    component: rabbitmq
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::515138251473:role/RABBITMQ-ROLE

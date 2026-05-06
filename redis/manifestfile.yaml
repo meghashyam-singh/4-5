@@ -1,0 +1,126 @@
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: redis-storage
+provisioner: ebs.csi.aws.com
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+  namespace: roboshop
+  labels:
+    project: roboshop
+    tier: db
+    component: redis
+spec:
+  serviceName: redis-headless-service
+  replicas: 1
+  selector:
+    matchLabels:
+      project: roboshop
+      tier: db
+      component: redis
+  template:
+    metadata:
+      labels:
+        project: roboshop
+        tier: db
+        component: redis
+    spec:
+      serviceAccountName: redis-service-account
+      containers:
+        - name: redis-cont
+          image: meghashyam792/roboshop:redis
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 6379
+              name: redis-port
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "128Mi"
+            limits:
+              cpu: "300m"
+              memory: "256Mi"
+          readinessProbe:
+            tcpSocket:
+              port: redis-port
+            failureThreshold: 1
+            initialDelaySeconds: 40
+            periodSeconds: 40
+            timeoutSeconds: 20
+          livenessProbe:
+            tcpSocket:
+              port: redis-port
+            failureThreshold: 1
+            initialDelaySeconds: 40
+            periodSeconds: 40
+            timeoutSeconds: 20
+          volumeMounts:
+            - name: redis-pvc
+              mountPath: /data
+  volumeClaimTemplates:
+    - metadata:
+        name: redis-pvc
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: redis-storage
+        resources:
+          requests:
+            storage: "5Gi"
+
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-service
+  namespace: roboshop
+spec:
+  type: ClusterIP
+  selector:
+    project: roboshop
+    tier: db
+    component: redis
+  ports:
+    - protocol: TCP
+      port: 6379
+      targetPort: 6379
+      name: redis-port
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-headless-service
+  namespace: roboshop
+spec:
+  clusterIP: None
+  selector:
+    project: roboshop
+    tier: db
+    component: redis
+  ports:
+    - protocol: TCP
+      port: 6379
+      targetPort: 6379
+      name: redis-port
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: redis-service-account
+  namespace: roboshop
+  labels:
+    project: roboshop
+    tier: db
+    component: redis
+          
+      

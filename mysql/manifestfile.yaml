@@ -1,0 +1,145 @@
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: mysql-storage
+provisioner: ebs.csi.aws.com
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mysql-config
+  namespace: roboshop
+data:
+  my.cnf: |
+    [mysqld]
+    innodb_redo_log_capacity = 2G
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mysql
+  namespace: roboshop
+  labels:
+    project: roboshop
+    tier: db
+    component: mysql
+spec:
+  serviceName: mysql-headless-service
+  replicas: 1
+  selector:
+    matchLabels:
+      project: roboshop
+      tier: db
+      component: mysql
+  template:
+    metadata:
+      labels:
+        project: roboshop
+        tier: db
+        component: mysql
+    spec:
+      serviceAccountName: mysql-service-account
+      containers:
+        - name: mysql-cont
+          image: meghashyam792/roboshop:mysql
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3306
+              name: mysql-port
+          # resources:
+          #   requests:
+          #     cpu: "200m"
+          #     memory: "128Mi"
+          #   limits:
+          #     cpu: "300m"
+          #     memory: "256Mi"
+          # readinessProbe:
+          #   tcpSocket:
+          #     port: mysql-port
+          #   failureThreshold: 1
+          #   initialDelaySeconds: 50
+          #   periodSeconds: 50
+          #   timeoutSeconds: 20
+          # livenessProbe:
+          #   tcpSocket:
+          #     port: mysql-port
+          #   failureThreshold: 1
+          #   initialDelaySeconds: 50
+          #   periodSeconds: 50
+          #   timeoutSeconds: 20
+          volumeMounts:
+            - name: mysql-volume
+              mountPath: /etc/mysql/conf.d/
+              subPath: my.cnf
+            - name: mysql-pvc
+              mountPath: /var/lib/mysql
+      volumes:
+        - name: mysql-volume
+          configMap:
+            name: mysql-config
+  volumeClaimTemplates:
+    - metadata:
+        name: mysql-pvc
+      spec:
+        storageClassName: mysql-storage
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: "10Gi"
+
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-service
+  namespace: roboshop
+spec:
+  type: ClusterIP
+  selector:
+    project: roboshop
+    tier: db
+    component: mysql
+  ports:
+    - protocol: TCP
+      port: 3306
+      targetPort: 3306
+      name: mysql-port
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-headless-service
+  namespace: roboshop
+spec:
+  clusterIP: None
+  selector:
+    project: roboshop
+    tier: db
+    component: mysql
+  ports:
+    - protocol: TCP
+      port: 3306
+      targetPort: 3306
+      name: mysql-port
+
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: mysql-service-account
+  namespace: roboshop
+  labels:
+    project: roboshop
+    tier: db
+    component: mysql
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::515138251473:role/MYSQL-ROLE

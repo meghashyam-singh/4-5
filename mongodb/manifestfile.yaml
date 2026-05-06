@@ -1,0 +1,126 @@
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: mongodb-storage
+provisioner: ebs.csi.aws.com
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mongodb
+  namespace: roboshop
+  labels:
+    project: roboshop
+    tier: db
+    component: mongodb
+spec:
+  serviceName: mongodb-headless-service
+  replicas: 1
+  selector:
+    matchLabels:
+      project: roboshop
+      tier: db
+      component: mongodb
+  template:
+    metadata:
+      labels:
+        project: roboshop
+        tier: db
+        component: mongodb
+    spec:
+      serviceAccountName: mongodb-service-account
+      containers:
+        - name: mongodb-cont
+          image: meghashyam792/roboshop
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 27017
+              name: mongodb-port
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+          readinessProbe:
+            tcpSocket:
+              port: mongodb-port
+            failureThreshold: 1
+            initialDelaySeconds: 40
+            periodSeconds: 40
+            timeoutSeconds: 15
+          livenessProbe:
+            tcpSocket:
+              port: mongodb-port
+            failureThreshold: 1
+            initialDelaySeconds: 40
+            periodSeconds: 40
+            timeoutSeconds: 15
+          volumeMounts:
+            - name: mongodb-pvc
+              mountPath: /data/db
+  volumeClaimTemplates:
+    - metadata:
+        name: mongodb-pvc
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: mongodb-storage
+        resources:
+          requests:
+            storage: "5Gi"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb-service
+  namespace: roboshop
+spec:
+  type: ClusterIp
+  selector:
+    project: roboshop
+    tier: db
+    component: mongodb
+  ports:
+    - protocol: TCP
+      port: 27017
+      targetPort: 27017
+      name: mongodb-port
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb-headless-service
+  namespace: roboshop
+spec:
+  clusterIp: None
+  selector:
+    project: roboshop
+    tier: db
+    component: mongodb
+  ports:
+    - protocol: TCP
+      port: 27017
+      targetPort: 27017
+      name: mongodb-port
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: mongodb-service-account
+  namespace: roboshop
+  labels:
+    project: roboshop
+    tier: db
+    component: mongodb
+  
+              
+  

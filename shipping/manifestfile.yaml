@@ -1,0 +1,118 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: shipping-config
+  namespace: roboshop
+data:
+  CART_ENDPOINT: "cart-service:8080"
+  DB_HOST: "mysql-service"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shipping
+  namespace: roboshop
+  labels:
+    project: roboshop
+    tier: backend
+    component: shipping
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      project: roboshop
+      tier: backend
+      component: shipping
+  template:
+    metadata:
+      labels:
+        project: roboshop
+        tier: backend
+        component: shipping
+    spec:
+      serviceAccountName: shipping-service-account
+      containers:
+        - name: shipping-cont
+          image: meghashyam792/roboshop:shipping
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+              name: shipping-port
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+          readinessProbe: 
+            httpGet:
+              path: /health
+              port: shipping-port
+            failureThreshold: 2
+            initialDelaySeconds: 40
+            periodDelaySeconds: 40
+            timeoutSeconds: 15
+          livenessProbe: 
+            httpGet:
+              path: /health
+              port: shipping-port
+            failureThreshold: 2
+            initialDelaySeconds: 40
+            periodDelaySeconds: 40
+            timeoutSeconds: 15
+          envFrom:
+            - configMapRef:
+                name: shipping-config
+              
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: shipping-service
+  namespace: roboshop
+spec:
+  type: ClusterIP
+  selector:
+    project: roboshop
+    tier: backend
+    component: shippping
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+      name: shipping-port
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: shipping-hpa
+  namespace: roboshop
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: shipping
+  minReplicas: 1
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 80
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: shipping-service-account
+  namespace: roboshop
+  labels:
+    project: roboshop
+    tier: backend
+    component: shipping

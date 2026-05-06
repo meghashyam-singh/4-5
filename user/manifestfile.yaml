@@ -1,0 +1,122 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: user-config
+  namespace: roboshop
+data:
+  MONGO: "true"
+  REDIS_URL: "redis://redis-service:6379"
+  MONGO_URL: "mongodb://mongodb-service:27017/users"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user
+  namespace: roboshop
+  labels:
+    project: roboshop
+    tier: backend
+    component: user
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      project: roboshop
+      tier: backend
+      component: user
+  template:
+    metadata:
+      labels:
+        project: roboshop
+        tier: backend
+        component: user
+    spec:
+      serviceAccountName: user-service-account
+      containers:
+        - name: user-cont
+          image: meghashyam792/roboshop:user
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+              name: user-port
+          resources:
+            requests:
+              cpu: "300m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: user-port
+            failureThreshold: 1
+            initialDelaySeconds: 50
+            periodSeconds: 50
+            timeoutSeconds: 20
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: user-port
+            failureThreshold: 1
+            initialDelaySeconds: 50
+            periodSeconds: 50
+            timeoutSeconds: 20
+          envFrom:
+            - configMapRef:
+                name: user-config
+          
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-service
+  namespace: roboshop
+spec:
+  type: ClusterIp
+  selector:
+    project: roboshop
+    tier: backend
+    component: user
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+      name: user-port
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: user-hpa
+  namespace: roboshop
+spec:
+  scaleTargteRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: user
+  minReplicas: 1
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: utilization
+          averageUtilization: 80
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: user-service-account
+  namespace: roboshop
+  labels:
+    project: roboshop
+    tier: backend
+    component: user
+          
+        

@@ -1,0 +1,4 @@
+FROM rabbitmq:3-management-alpine
+ENV RABBITMQ_DEFAULT_USER="roboshop"
+ENV RABBITMQ_DEFAULT_PASS="roboshop123"
+ENV RABBITMQ_DEFAULT_VHOST="/"
