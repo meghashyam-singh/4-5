@@ -82,7 +82,7 @@ metadata:
   name: mongodb-service
   namespace: roboshop
 spec:
-  type: ClusterIp
+  type: ClusterIP
   selector:
     project: roboshop
     tier: db
@@ -100,7 +100,7 @@ metadata:
   name: mongodb-headless-service
   namespace: roboshop
 spec:
-  clusterIp: None
+  clusterIP: None
   selector:
     project: roboshop
     tier: db
