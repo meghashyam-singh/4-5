@@ -74,7 +74,7 @@ spec:
           #   timeoutSeconds: 20
           volumeMounts:
             - name: mysql-volume
-              mountPath: /etc/mysql/conf.d/
+              mountPath: /etc/mysql/conf.d/my.cnf
               subPath: my.cnf
             - name: mysql-pvc
               mountPath: /var/lib/mysql
