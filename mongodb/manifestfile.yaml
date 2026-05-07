@@ -35,7 +35,7 @@ spec:
       serviceAccountName: mongodb-service-account
       containers:
         - name: mongodb-cont
-          image: meghashyam792/roboshop
+          image: meghashyam792/roboshop:mongodb
           imagePullPolicy: Always
           ports:
             - containerPort: 27017
